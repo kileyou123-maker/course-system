@@ -74,6 +74,33 @@ function loadStore(){
     return {...parsed,wrongEver:ever};
   }catch{return structuredClone(defaultState)}
 }
+function mergeStores(base,incoming){
+  const out={...base};
+  out.wrong={...(base.wrong||{}),...(incoming.wrong||{})};
+  out.wrongEver={...(base.wrongEver||{})};
+  for(const [id,m] of Object.entries(incoming.wrongEver||{})){
+    const p=out.wrongEver[id]||{};
+    out.wrongEver[id]={
+      count:Math.max(p.count||0,m.count||0),
+      firstAt:Math.min(Number(p.firstAt||Infinity),Number(m.firstAt||Infinity)),
+      lastAt:Math.max(Number(p.lastAt||0),Number(m.lastAt||0)),
+      lastPicked:m.lastPicked??p.lastPicked??null
+    };
+    if(!isFinite(out.wrongEver[id].firstAt)) out.wrongEver[id].firstAt=m.firstAt||p.firstAt||Date.now();
+  }
+  out.bookmarks={...(base.bookmarks||{}),...(incoming.bookmarks||{})};
+  out.notes={...(base.notes||{}),...(incoming.notes||{})};
+  const seen=new Set(), merged=[];
+  for(const r of [...(base.history||[]),...(incoming.history||[])]){
+    const k=String(r.id||'')+'|'+String(r.date||'')+'|'+String(r.range||'');
+    if(seen.has(k))continue; seen.add(k); merged.push(r);
+  }
+  out.history=merged.sort((a,b)=>new Date(b.date||0)-new Date(a.date||0)).slice(0,300);
+  const bs=base.session, is=incoming.session;
+  out.session=(!bs?is:!is?bs:(Number(is.startedAt||0)>Number(bs.startedAt||0)?is:bs))||null;
+  return out;
+}
+
 function saveStore(s){localStorage.setItem(KEY,JSON.stringify(s))}
 function shuffle(a){a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 function fmtSec(sec){sec=Math.max(0,Math.floor(sec||0));return `${String(Math.floor(sec/60)).padStart(2,'0')}:${String(sec%60).padStart(2,'0')}`}
@@ -102,6 +129,22 @@ function App(){
   },[view,store.session?.duration]);
 
   const updateStore=fn=>setStore(prev=>{const next=typeof fn==='function'?fn(prev):fn;return next});
+  const importRecords=file=>{
+    if(!file)return;
+    const reader=new FileReader();
+    reader.onload=()=>{
+      try{
+        const incoming=JSON.parse(String(reader.result||'{}'));
+        if(!incoming || typeof incoming!=='object')throw new Error('invalid');
+        setStore(prev=>mergeStores(prev,incoming));
+        message.success('舊紀錄已合併，原有紀錄不會被覆蓋');
+      }catch{
+        message.error('匯入失敗：檔案不是有效的測驗紀錄');
+      }
+    };
+    reader.readAsText(file,'utf-8');
+  };
+
   const performance=useMemo(()=>{
     const chapterStats=CHAPTERS.map((ch,ci)=>({title:ch.title,attempted:0,correct:0,percent:0}));
     let attempted=0,correct=0;
@@ -194,6 +237,7 @@ function App(){
       <Text type="secondary">測驗首頁</Text>
       <Title level={1}>選擇你的練習方式</Title>
       <Paragraph type="secondary">題庫共 {ALL.length} 題，可正式測驗、章節練習、指定題號、錯題重練、收藏筆記與查看完整解答。</Paragraph>
+      <Alert type="info" showIcon message="進度固定保存在這個正式網址" description="之後請固定使用 drone-license-quiz-kileyou123-1074.vercel.app。重新部署不會改變這個網址。" style={{marginTop:16}}/>
     </div>
 
     {store.session&&<Alert
@@ -271,10 +315,18 @@ function App(){
       <Col xs={24} md={12} lg={8}><Card title="收藏 / 筆記"><Paragraph type="secondary">已收藏 {Object.keys(store.bookmarks||{}).length} 題。</Paragraph><Button block onClick={()=>setView('library')}>查看收藏與筆記</Button></Card></Col>
       <Col xs={24} md={12} lg={8}><Card title="學習紀錄"><Paragraph type="secondary">查看歷次測驗與每次錯題。</Paragraph><Button block onClick={()=>setView('history')}>查看學習紀錄</Button></Card></Col>
       <Col xs={24} md={12} lg={8}><Card title="全部題目・分章解答"><Paragraph type="secondary">完整 {ALL.length} 題，依章節查看答案。</Paragraph><Button block onClick={()=>setView('answers')}>查看全部題目與解答</Button></Card></Col>
-      <Col xs={24} md={12} lg={8}><Card title="資料管理"><Space><Button onClick={()=>{
-        const blob=new Blob([JSON.stringify(store,null,2)],{type:'application/json'}),a=document.createElement('a');
-        a.href=URL.createObjectURL(blob);a.download='無人機測驗學習紀錄.json';a.click();URL.revokeObjectURL(a.href)
-      }}>匯出紀錄</Button><Popconfirm title="確定清除所有紀錄？" onConfirm={()=>{setStore(structuredClone(defaultState));message.success('已清除')}}><Button danger>清除紀錄</Button></Popconfirm></Space></Card></Col>
+      <Col xs={24} md={12} lg={8}><Card title="資料管理">
+        <Paragraph type="secondary">請固定使用目前正式網址。若舊紀錄在其他舊網址，可先在舊網址「匯出紀錄」，再回來合併匯入。</Paragraph>
+        <Space wrap>
+          <Button onClick={()=>{
+            const blob=new Blob([JSON.stringify(store,null,2)],{type:'application/json'}),a=document.createElement('a');
+            a.href=URL.createObjectURL(blob);a.download='無人機測驗學習紀錄.json';a.click();URL.revokeObjectURL(a.href)
+          }}>匯出紀錄</Button>
+          <Button onClick={()=>document.getElementById('record-import').click()}>匯入舊紀錄</Button>
+          <input id="record-import" type="file" accept="application/json,.json" style={{display:'none'}} onChange={e=>{importRecords(e.target.files?.[0]);e.target.value=''}}/>
+          <Popconfirm title="確定清除所有紀錄？" onConfirm={()=>{setStore(structuredClone(defaultState));message.success('已清除')}}><Button danger>清除紀錄</Button></Popconfirm>
+        </Space>
+      </Card></Col>
     </Row>
   </>;
 
