@@ -51,6 +51,12 @@ const CHAPTERS=[{"title":"第一章 民用航空法及相關法規","questions":
 const ALL=CHAPTERS.flatMap((c,ci)=>c.questions.map(q=>({...q,chapterIndex:ci,chapter:c.title,id:`${ci+1}-${q.number}`})));
 const KEY='droneQuizV3';
 const defaultState={wrong:{},wrongEver:{},bookmarks:{},notes:{},history:[],session:null};
+const RECOVERY_KEY='droneQuizRecovered20261006';
+const RECOVERED_HISTORY=[
+  {id:'recovered-ch1-1-20',date:'2026-10-06T14:23:00+08:00',mode:'range',range:'第一章 民用航空法及相關法規｜第 1～20 題',total:20,correct:19,score:95,durationSec:122,details:[],recoveredAggregate:true,chapterIndex:0},
+  {id:'recovered-ch1-20-40',date:'2026-10-06T14:26:00+08:00',mode:'range',range:'第一章 民用航空法及相關法規｜第 20～40 題',total:21,correct:20,score:95,durationSec:119,details:[],recoveredAggregate:true,chapterIndex:0},
+  {id:'recovered-ch2-1-20',date:'2026-10-06T14:21:00+08:00',mode:'range',range:'第二章 基礎飛行原理｜第 1～20 題',total:20,correct:18,score:90,durationSec:120,details:[],recoveredAggregate:true,chapterIndex:1}
+];
 
 function loadStore(){
   try{
@@ -70,6 +76,12 @@ function loadStore(){
     }
     for(const [id,w] of Object.entries(parsed.wrong||{})){
       if(!ever[id])ever[id]={count:1,firstAt:w.at||Date.now(),lastAt:w.at||Date.now(),lastPicked:w.picked??null};
+    }
+    if(!localStorage.getItem(RECOVERY_KEY)){
+      const existingIds=new Set((parsed.history||[]).map(r=>String(r.id)));
+      const add=RECOVERED_HISTORY.filter(r=>!existingIds.has(String(r.id)));
+      parsed.history=[...add,...(parsed.history||[])].sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
+      localStorage.setItem(RECOVERY_KEY,'1');
     }
     return {...parsed,wrongEver:ever};
   }catch{return structuredClone(defaultState)}
@@ -149,6 +161,13 @@ function App(){
     const chapterStats=CHAPTERS.map((ch,ci)=>({title:ch.title,attempted:0,correct:0,percent:0}));
     let attempted=0,correct=0;
     for(const rec of store.history||[]){
+      if(rec.recoveredAggregate && Number.isInteger(rec.chapterIndex)){
+        attempted+=Number(rec.total||0);
+        correct+=Number(rec.correct||0);
+        chapterStats[rec.chapterIndex].attempted+=Number(rec.total||0);
+        chapterStats[rec.chapterIndex].correct+=Number(rec.correct||0);
+        continue;
+      }
       for(const d of rec.details||[]){
         const q=ALL.find(x=>x.id===d.id);
         if(!q)continue;
@@ -391,12 +410,12 @@ function App(){
 
   const historyColumns=[
     {title:'日期',dataIndex:'date',render:v=>new Date(v).toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})},
-    {title:'模式',dataIndex:'mode',render:v=><Tag color="blue">{modeLabel({mode:v})}</Tag>},
+    {title:'模式',dataIndex:'mode',render:(v,r)=><Space size={4}><Tag color="blue">{modeLabel({mode:v})}</Tag>{r.recoveredAggregate&&<Tag>已還原</Tag>}</Space>},
     {title:'範圍',dataIndex:'range',responsive:['md']},
     {title:'結果',render:(_,r)=>`${r.correct}/${r.total}`},
     {title:'正確率',dataIndex:'score',render:v=><Text type={v<80?'danger':undefined}>{v}%</Text>},
     {title:'用時',dataIndex:'durationSec',render:v=>fmtSec(v)},
-    {title:'',key:'action',render:(_,r)=><Button type="link" onClick={e=>{e.stopPropagation();setSelectedRecord(r);setView('historyDetail')}}>查看錯題</Button>}
+    {title:'',key:'action',render:(_,r)=><Button type="link" onClick={e=>{e.stopPropagation();setSelectedRecord(r);setView('historyDetail')}}>{r.recoveredAggregate?'查看還原資料':'查看錯題'}</Button>}
   ];
   const history=<>
     <div className="page-head"><Text type="secondary">學習紀錄</Text><Title level={1}>歷次測驗</Title><Paragraph type="secondary">點擊任一筆紀錄即可查看當次答錯的題目、你的答案與正確答案。</Paragraph></div>
@@ -428,11 +447,14 @@ function App(){
           <Tag color="blue">{modeLabel(rec)}</Tag><Tag>{rec.range}</Tag><Tag color={rec.score>=80?'green':'orange'}>{rec.score}%</Tag><Tag>{rec.correct}/{rec.total}</Tag><Tag>{fmtSec(rec.durationSec)}</Tag>
         </Space>
       </div>
-      <Alert type={wrongDetails.length?'error':'success'} showIcon
+      {rec.recoveredAggregate?<Alert type="info" showIcon
+        message="這筆紀錄由先前截圖還原"
+        description={`已還原成績 ${rec.correct}/${rec.total}（${rec.score}%）。原截圖沒有顯示實際錯誤題號，因此無法安全還原是哪一題答錯。`}
+        style={{marginBottom:20}}/>:<Alert type={wrongDetails.length?'error':'success'} showIcon
         message={wrongDetails.length?`本次答錯 ${wrongDetails.length} 題`:'本次全部答對'}
         description={wrongDetails.length?'以下列出每一題你的作答與正確答案。':'沒有錯題。'}
-        style={{marginBottom:20}}/>
-      {wrongDetails.length?wrongDetails.map(({d,q})=>{
+        style={{marginBottom:20}}/>}
+      {!rec.recoveredAggregate && (wrongDetails.length?wrongDetails.map(({d,q})=>{
         const picked=q.options.find(o=>o.key===d.picked),right=q.options.find(o=>o.key===q.answer);
         return <Card key={q.id} className="wrong-card" style={{marginBottom:14}}>
           <Space wrap><Tag>{q.chapter}</Tag><Tag>第 {q.number} 題</Tag></Space>
@@ -448,7 +470,7 @@ function App(){
           {!d.picked&&<Alert type="warning" showIcon message="此題未作答" style={{marginTop:12}}/>}
           {store.notes[q.id]&&<Alert type="info" message={`你的筆記：${store.notes[q.id]}`} style={{marginTop:12}}/>}
         </Card>
-      }):<Empty description="沒有錯題"/>}
+      }):<Empty description="沒有錯題"/>)} 
     </>;
   })();
 
