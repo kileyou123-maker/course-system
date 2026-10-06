@@ -81,6 +81,22 @@ function App(){
   },[view,store.session?.duration]);
 
   const updateStore=fn=>setStore(prev=>{const next=typeof fn==='function'?fn(prev):fn;return next});
+  const performance=useMemo(()=>{
+    const chapterStats=CHAPTERS.map((ch,ci)=>({title:ch.title,attempted:0,correct:0,percent:0}));
+    let attempted=0,correct=0;
+    for(const rec of store.history||[]){
+      for(const d of rec.details||[]){
+        const q=ALL.find(x=>x.id===d.id);
+        if(!q)continue;
+        attempted++;
+        chapterStats[q.chapterIndex].attempted++;
+        if(d.ok){correct++;chapterStats[q.chapterIndex].correct++}
+      }
+    }
+    chapterStats.forEach(s=>s.percent=s.attempted?Math.round(s.correct/s.attempted*100):0);
+    return {attempted,correct,percent:attempted?Math.round(correct/attempted*100):0,chapters:chapterStats};
+  },[store.history]);
+
 
   const goHome=()=>{setView('home');setSelectedRecord(null)};
   const begin=cfg=>{
@@ -158,6 +174,28 @@ function App(){
       <Col xs={24} md={8}><Card className="stat-card"><Statistic title="滿分" value={100} suffix="分"/></Card></Col>
       <Col xs={24} md={8}><Card className="stat-card"><Statistic title="時間限制" value={30} suffix="分鐘"/></Card></Col>
     </Row>
+
+
+    <Card title="測驗正確率" style={{marginBottom:24}} extra={<Text type="secondary">依所有歷次作答統計</Text>}>
+      <Row gutter={[20,20]} align="middle">
+        <Col xs={24} md={6}>
+          <Statistic title="全部題目正確率" value={performance.percent} suffix="%" />
+          <Text type="secondary">累計作答 {performance.attempted} 題，答對 {performance.correct} 題</Text>
+        </Col>
+        <Col xs={24} md={18}>
+          <Space direction="vertical" size="middle" style={{width:'100%'}}>
+            {performance.chapters.map((s,i)=><div key={i}>
+              <Flex justify="space-between" gap={12}>
+                <Text>{s.title}</Text>
+                <Text strong>{s.percent}%</Text>
+              </Flex>
+              <Progress percent={s.percent} status="normal" />
+              <Text type="secondary">作答 {s.attempted} 題 · 答對 {s.correct} 題</Text>
+            </div>)}
+          </Space>
+        </Col>
+      </Row>
+    </Card>
 
     <Card title="正式測驗模式" extra={<Button type="primary" onClick={startFormal}>開始正式測驗</Button>} style={{marginBottom:24}}>
       <Text type="secondary">四章按比例抽 20 題，限時 30 分鐘，交卷後查看成績與錯題。</Text>
@@ -274,6 +312,16 @@ function App(){
   ];
   const history=<>
     <div className="page-head"><Text type="secondary">學習紀錄</Text><Title level={1}>歷次測驗</Title><Paragraph type="secondary">點擊任一筆紀錄即可查看當次答錯的題目、你的答案與正確答案。</Paragraph></div>
+    <Row gutter={[16,16]} style={{marginBottom:16}}>
+      <Col xs={24} md={8}><Card><Statistic title="全部正確率" value={performance.percent} suffix="%"/></Card></Col>
+      <Col xs={24} md={16}><Card title="各章正確率">
+        <Space direction="vertical" style={{width:'100%'}}>
+          {performance.chapters.map((s,i)=><Flex key={i} justify="space-between" align="center" gap={16}>
+            <Text>{s.title}</Text><Space><Text type="secondary">{s.correct}/{s.attempted||0}</Text><Tag color={s.percent>=80?'green':s.percent>=60?'orange':'red'}>{s.percent}%</Tag></Space>
+          </Flex>)}
+        </Space>
+      </Card></Col>
+    </Row>
     <Card>
       <Table rowKey="id" columns={historyColumns} dataSource={store.history} pagination={{pageSize:10,showSizeChanger:false}} locale={{emptyText:<Empty description="目前沒有測驗紀錄"/>}}
         onRow={record=>({className:'history-row',onClick:()=>{setSelectedRecord(record);setView('historyDetail')}})}/>
