@@ -77,12 +77,12 @@ function loadStore(){
     for(const [id,w] of Object.entries(parsed.wrong||{})){
       if(!ever[id])ever[id]={count:1,firstAt:w.at||Date.now(),lastAt:w.at||Date.now(),lastPicked:w.picked??null};
     }
-    if(!localStorage.getItem(RECOVERY_KEY)){
-      const existingIds=new Set((parsed.history||[]).map(r=>String(r.id)));
-      const add=RECOVERED_HISTORY.filter(r=>!existingIds.has(String(r.id)));
+    const existingIds=new Set((parsed.history||[]).map(r=>String(r.id)));
+    const add=RECOVERED_HISTORY.filter(r=>!existingIds.has(String(r.id)));
+    if(add.length){
       parsed.history=[...add,...(parsed.history||[])].sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
-      localStorage.setItem(RECOVERY_KEY,'1');
     }
+    localStorage.setItem(RECOVERY_KEY,'1');
     return {...parsed,wrongEver:ever};
   }catch{return structuredClone(defaultState)}
 }
