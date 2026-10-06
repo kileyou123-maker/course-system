@@ -210,6 +210,13 @@ function App(){
     const qs=Object.keys(store.wrongEver||{}).map(id=>ALL.find(q=>q.id===id)).filter(Boolean);
     if(qs.length)begin({mode:'everwrong',questions:shuffle(qs),duration:null,range:`曾經錯過 ${qs.length} 題`});
   };
+  const startEverWrongChapter=ci=>{
+    const qs=Object.keys(store.wrongEver||{}).map(id=>ALL.find(q=>q.id===id)).filter(q=>q&&q.chapterIndex===ci);
+    if(qs.length)begin({mode:'everwrong',questions:shuffle(qs),duration:null,range:`${CHAPTERS[ci].title}｜曾錯題 ${qs.length} 題`});
+  };
+  const startEverWrongSingle=q=>{
+    begin({mode:'everwrong',questions:[q],duration:null,range:`${q.chapter}｜第 ${q.number} 題`});
+  };
   const startBookmarks=()=>{
     const qs=Object.keys(store.bookmarks||{}).map(id=>ALL.find(q=>q.id===id)).filter(Boolean);
     if(qs.length)begin({mode:'bookmarks',questions:qs,duration:null,range:`收藏 ${qs.length} 題`});
@@ -496,24 +503,51 @@ function App(){
       .map(([id,meta])=>({q:ALL.find(x=>x.id===id),meta}))
       .filter(x=>x.q)
       .sort((a,b)=>(b.meta.count||0)-(a.meta.count||0));
+    const chapterCounts=CHAPTERS.map((_,ci)=>entries.filter(x=>x.q.chapterIndex===ci).length);
     return <>
       <div className="page-head">
         <Text type="secondary">歷史錯題</Text>
         <Title level={1}>之前錯過的題目</Title>
-        <Paragraph type="secondary">這裡永久保留你曾經答錯過的題目，即使後來答對也不會移除。可用來考前集中複習。</Paragraph>
+        <Paragraph type="secondary">這裡永久保留你曾經答錯過的題目。可以直接練全部、只練某一章，或只重做單一題。</Paragraph>
       </div>
+
+      <Card title="開始練習" style={{marginBottom:16}}>
+        <Space direction="vertical" size="middle" style={{width:'100%'}}>
+          <Button type="primary" size="large" block disabled={!entries.length} onClick={startEverWrong}>
+            練習全部曾錯題（{entries.length} 題）
+          </Button>
+          <Row gutter={[8,8]}>
+            {CHAPTERS.map((ch,ci)=><Col xs={24} sm={12} key={ci}>
+              <Button block disabled={!chapterCounts[ci]} onClick={()=>startEverWrongChapter(ci)}>
+                {ch.title}（{chapterCounts[ci]} 題）
+              </Button>
+            </Col>)}
+          </Row>
+        </Space>
+      </Card>
+
       <Row gutter={[16,16]} style={{marginBottom:16}}>
-        <Col xs={24} md={8}><Card><Statistic title="曾錯題目" value={entries.length} suffix="題"/></Card></Col>
-        <Col xs={24} md={8}><Card><Statistic title="累計答錯次數" value={entries.reduce((n,x)=>n+(x.meta.count||0),0)} suffix="次"/></Card></Col>
-        <Col xs={24} md={8}><Card><Button type="primary" block size="large" disabled={!entries.length} onClick={startEverWrong}>重新練習全部曾錯題</Button></Card></Col>
+        <Col xs={24} md={12}><Card><Statistic title="曾錯題目" value={entries.length} suffix="題"/></Card></Col>
+        <Col xs={24} md={12}><Card><Statistic title="累計答錯次數" value={entries.reduce((n,x)=>n+(x.meta.count||0),0)} suffix="次"/></Card></Col>
       </Row>
+
       {entries.length?<Collapse items={entries.map(({q,meta})=>({
         key:q.id,
-        label:<Flex justify="space-between" align="center" gap={12} wrap><Space wrap><Tag color="red">錯過 {meta.count||1} 次</Tag><Tag>{q.chapter}</Tag><Text strong>第 {q.number} 題</Text></Space><Text type="secondary">{q.question}</Text></Flex>,
+        label:<Flex justify="space-between" align="center" gap={12} wrap>
+          <Space wrap><Tag color="red">錯過 {meta.count||1} 次</Tag><Tag>{q.chapter}</Tag><Text strong>第 {q.number} 題</Text></Space>
+          <Text type="secondary">{q.question}</Text>
+        </Flex>,
         children:<div>
-          <Title level={5}>{q.question}</Title>
+          <Flex justify="space-between" align="start" gap={12} wrap>
+            <Title level={5} style={{marginTop:0,flex:1}}>{q.question}</Title>
+            <Button type="primary" onClick={()=>startEverWrongSingle(q)}>練習這一題</Button>
+          </Flex>
           {q.options.map(o=><div key={o.key} className={`answer-option ${o.key===q.answer?'correct':''}`}>
-            <Space wrap><Text strong>({o.key})</Text><Text>{o.text}</Text>{o.key===q.answer&&<Tag color="success">正確答案</Tag>}{o.key===meta.lastPicked&&o.key!==q.answer&&<Tag color="error">上次錯選</Tag>}</Space>
+            <Space wrap>
+              <Text strong>({o.key})</Text><Text>{o.text}</Text>
+              {o.key===q.answer&&<Tag color="success">正確答案</Tag>}
+              {o.key===meta.lastPicked&&o.key!==q.answer&&<Tag color="error">上次錯選</Tag>}
+            </Space>
           </div>)}
           <Space wrap style={{marginTop:12}}>
             <Text type="secondary">最後答錯：{meta.lastAt?new Date(meta.lastAt).toLocaleString('zh-TW'):'—'}</Text>
@@ -521,6 +555,7 @@ function App(){
           </Space>
         </div>
       }))}/>:<Empty description="目前還沒有曾經答錯的題目"/>}
+
       <Button style={{marginTop:16}} onClick={goHome}>回首頁</Button>
     </>;
   })();
