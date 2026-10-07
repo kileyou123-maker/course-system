@@ -209,6 +209,34 @@ function App(){
     return {attempted,correct,percent:attempted?Math.round(correct/attempted*100):0,chapters:chapterStats};
   },[store.history]);
 
+  const readiness=useMemo(()=>{
+    // Only actual, completed 20-question formal exam attempts qualify.
+    // Screenshot-recovered chapter summaries and practice sessions do not.
+    const formal=(store.history||[]).filter(r=>
+      r.mode==='formal' && !r.recoveredAggregate &&
+      r.total===20 && Array.isArray(r.details) && r.details.length===20
+    ).sort((a,b)=>Date.parse(b.date||0)-Date.parse(a.date||0));
+    const recent=formal.slice(0,3);
+    const average=recent.length?Math.round(recent.reduce((n,r)=>n+r.correct,0)/recent.length*5):null;
+    const ready=recent.length===3 && recent.every(r=>r.correct>=18);
+    const chapter=CHAPTERS.map((ch,ci)=>({title:ch.title,correct:0,total:0,percentage:null,chapterIndex:ci}));
+    const questionLookup=new Map(ALL.map(q=>[q.id,q]));
+    const misses={};
+    for(const r of recent){
+      for(const d of r.details){
+        const q=questionLookup.get(d.id);
+        if(!q)continue;
+        const row=chapter[q.chapterIndex];
+        row.total++;if(d.ok)row.correct++;
+        else misses[d.id]=(misses[d.id]||0)+1;
+      }
+    }
+    chapter.forEach(row=>row.percentage=row.total?Math.round(row.correct/row.total*100):null);
+    const weakest=chapter.filter(row=>row.total).sort((a,b)=>a.percentage-b.percentage)[0]||null;
+    const repeatMisses=Object.values(misses).filter(x=>x>=2).length;
+    return {formal,recent,average,ready,chapter,weakest,repeatMisses};
+  },[store.history]);
+
   const goHome=()=>{setView('home');setSelectedRecord(null)};
   const begin=cfg=>{
     updateStore(s=>({...s,session:{...cfg,index:0,answers:{},startedAt:Date.now(),remaining:cfg.duration}}));
@@ -333,6 +361,50 @@ function App(){
       </Row>
     </Card>
 
+    <Card title="考前準備度檢測" extra={<Tag color={readiness.ready?'success':readiness.recent.length===3?'warning':'processing'}>{readiness.ready?'達到建議練習目標':readiness.recent.length===3?'建議加強':'累積正式模擬中'}</Tag>} style={{marginBottom:24}}>
+      <Paragraph type="secondary">系統自動分析最近三回正式 20 題測驗。建議目標：連續三回各答對至少 18 題（90%）；這是自訂練習目標，不是官方及格標準。</Paragraph>
+      <Row gutter={[16,16]} style={{marginBottom:20}}>
+        <Col xs={24} sm={8}><Statistic title="正式測驗完成次數" value={readiness.formal.length} suffix="回"/></Col>
+        <Col xs={24} sm={8}><Statistic title="最近三回平均正確率" value={readiness.average===null?'—':readiness.average} suffix={readiness.average===null?'':'%'}/></Col>
+        <Col xs={24} sm={8}><Statistic title="連續達標回數" value={(()=>{
+          let n=0;for(const r of readiness.formal){if(r.correct>=18)n++;else break;}return Math.min(n,3);
+        })()} suffix="/ 3"/></Col>
+      </Row>
+      <Space direction="vertical" size="middle" style={{width:'100%'}}>
+        <div>
+          <Flex justify="space-between" gap={12} wrap><Text strong>最近三回正式成績</Text><Text type="secondary">需要 3 回，已取得 {readiness.recent.length} 回</Text></Flex>
+          <Row gutter={[8,8]} style={{marginTop:10}}>
+            {[0,1,2].map((i)=><Col xs={24} sm={8} key={i}>
+              <Card size="small">
+                <Flex justify="space-between" align="center">
+                  <div><Text type="secondary">第 {i+1} 回（由近到遠）</Text><div><Text strong style={{fontSize:22}}>{readiness.recent[i]?`${readiness.recent[i].correct}/20`:'尚未完成'}</Text></div></div>
+                  {readiness.recent[i]&&<Tag color={readiness.recent[i].correct>=18?'success':'warning'}>{readiness.recent[i].correct>=18?'達標':'待加強'}</Tag>}
+                </Flex>
+              </Card>
+            </Col>)}
+          </Row>
+        </div>
+        {readiness.recent.length>0&&<>
+          <Divider style={{margin:'4px 0'}}/>
+          <Text strong>最近三回各章表現</Text>
+          {readiness.chapter.map((row,ci)=><div key={ci}>
+            <Flex justify="space-between" gap={12} wrap><Text>{row.title}</Text><Text>{row.total?`${row.correct}/${row.total}（${row.percentage}%）`:'尚未抽到'}</Text></Flex>
+            <Progress percent={row.percentage||0} showInfo={false} style={{marginBottom:0}}/>
+          </div>)}
+          {readiness.weakest&&<Alert type="info" showIcon message={`建議優先複習：${readiness.weakest.title}`}
+            description={`最近三回在此章答對 ${readiness.weakest.correct}/${readiness.weakest.total} 題。重複答錯的題目有 ${readiness.repeatMisses} 題。`}/>}
+        </>}
+        <Alert type={readiness.ready?'success':'info'} showIcon
+          message={readiness.ready?'最近三回均達 18/20，已達建議準備目標':readiness.recent.length<3?'還需要更多正式模擬成績':'最近三回尚未全部達到 18/20'}
+          description={readiness.ready?'可以繼續練習弱項，確認不同題目也能維持成績。':readiness.recent.length<3?'請使用下方「正式測驗模式」完成 20 題測試，系統會在交卷後自動更新。':'先複習錯題與弱勢章節，再做下一回正式測驗。'}/>
+        <Flex gap={8} wrap>
+          <Button type="primary" onClick={startFormal}>再做一回正式模擬</Button>
+          <Button onClick={()=>setView('history')}>查看歷次成績</Button>
+          <Button disabled={!Object.keys(store.wrongEver||{}).length} onClick={()=>setView('wrongEver')}>複習曾錯題</Button>
+        </Flex>
+      </Space>
+    </Card>
+
     <Card title="正式測驗模式" extra={<Button type="primary" onClick={startFormal}>開始正式測驗</Button>} style={{marginBottom:24}}>
       <Text type="secondary">四章按比例抽 20 題，限時 30 分鐘，交卷後查看成績與錯題。</Text>
     </Card>
@@ -433,6 +505,7 @@ function App(){
     return <>
       <Result status={rec.score>=80?'success':'warning'} title={`${rec.score} 分`} subTitle={`${rec.correct} / ${rec.total} 題答對 · 用時 ${fmtSec(rec.durationSec)}`}
         extra={[<Button key="home" type="primary" onClick={goHome}>回首頁</Button>,<Button key="history" onClick={()=>setView('history')}>學習紀錄</Button>,<Button key="wrong" onClick={startWrong}>錯題重練</Button>]}/>
+      {rec.mode==='formal'&&<Alert type="info" showIcon style={{marginBottom:16}} message="這回正式成績已納入考前準備度統計" description="回首頁即可看到最近三回成績、各章正確率和建議練習方向。"/>}
       <Title level={3}>本次錯題</Title>
       {wrong.length?wrong.map(q=>{
         const d=rec.details.find(x=>x.id===q.id),picked=q.options.find(o=>o.key===d.picked),right=q.options.find(o=>o.key===q.answer);
@@ -456,6 +529,7 @@ function App(){
     {title:'',key:'action',render:(_,r)=><Button type="link" onClick={e=>{e.stopPropagation();setSelectedRecord(r);setView('historyDetail')}}>{r.recoveredAggregate?'查看還原資料':'查看錯題'}</Button>}
   ];
   const history=<>
+    <Alert type="info" showIcon style={{marginBottom:16}} message={`考前準備度：最近 ${readiness.recent.length}/3 回正式模擬，${readiness.ready?'已達建議目標':'尚未達到三回各 18/20 的建議目標'}`} description="僅計入實際完成的正式 20 題測驗，不使用章節練習或截圖還原的統計成績。"/>
     <div className="page-head"><Text type="secondary">學習紀錄</Text><Title level={1}>歷次測驗</Title><Paragraph type="secondary">點擊任一筆紀錄可查看錯題；截圖還原的統計僅有總分與作答數，沒有個別錯題資料。</Paragraph></div>
     <Row gutter={[16,16]} style={{marginBottom:16}}>
       <Col xs={24} md={8}><Card><Statistic title="全部正確率" value={performance.percent} suffix="%"/></Card></Col>
