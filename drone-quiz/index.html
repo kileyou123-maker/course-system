@@ -52,6 +52,15 @@ const ALL=CHAPTERS.flatMap((c,ci)=>c.questions.map(q=>({...q,chapterIndex:ci,cha
 const KEY='droneQuizV3';
 const defaultState={wrong:{},wrongEver:{},bookmarks:{},notes:{},history:[],session:null};
 const RECOVERY_KEY='droneQuizRecovered20261006';
+const CONFIRMED_BASELINE_DATE='2026-10-07T01:26:43+08:00';
+const CONFIRMED_BASELINE_CHAPTERS=[
+  {attempted:84,correct:80},
+  {attempted:42,correct:38},
+  {attempted:163,correct:116},
+  {attempted:52,correct:46}
+];
+// Confirmed from user-provided screenshots; individual wrong question IDs are unknown.
+// Only count detailed attempts after the last baseline screenshot to avoid double counting.
 const RECOVERED_HISTORY=[
   {id:'recovered-ch1-1-20',date:'2026-10-06T14:23:00+08:00',mode:'range',range:'第一章 民用航空法及相關法規｜第 1～20 題',total:20,correct:19,score:95,durationSec:122,details:[],recoveredAggregate:true,chapterIndex:0},
   {id:'recovered-ch1-20-40',date:'2026-10-06T14:26:00+08:00',mode:'range',range:'第一章 民用航空法及相關法規｜第 20～40 題',total:21,correct:20,score:95,durationSec:119,details:[],recoveredAggregate:true,chapterIndex:0},
@@ -84,7 +93,13 @@ function loadStore(){
     }
     localStorage.setItem(RECOVERY_KEY,'1');
     return {...parsed,wrongEver:ever};
-  }catch{return structuredClone(defaultState)}
+  }catch{
+    try{
+      const backup=JSON.parse(localStorage.getItem(KEY+'_backup')||'null');
+      if(backup&&Array.isArray(backup.history))return {...structuredClone(defaultState),...backup};
+    }catch{}
+    return structuredClone(defaultState);
+  }
 }
 function mergeStores(base,incoming){
   const out={...base};
@@ -113,7 +128,14 @@ function mergeStores(base,incoming){
   return out;
 }
 
-function saveStore(s){localStorage.setItem(KEY,JSON.stringify(s))}
+function saveStore(s){
+  try{
+    const next=JSON.stringify(s);
+    const previous=localStorage.getItem(KEY);
+    if(previous && previous!==next)localStorage.setItem(KEY+'_backup',previous);
+    localStorage.setItem(KEY,next);
+  }catch(e){console.warn('測驗進度儲存失敗，請匯出備份',e)}
+}
 function shuffle(a){a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 function fmtSec(sec){sec=Math.max(0,Math.floor(sec||0));return `${String(Math.floor(sec/60)).padStart(2,'0')}:${String(sec%60).padStart(2,'0')}`}
 function modeLabel(s){return ({formal:'正式測驗',chapter:'章節練習',range:'指定題號',wrong:'錯題重練',everwrong:'曾錯題複習',bookmarks:'收藏題目'})[s.mode]||'練習'}
@@ -158,17 +180,24 @@ function App(){
   };
 
   const performance=useMemo(()=>{
-    const chapterStats=CHAPTERS.map((ch,ci)=>({title:ch.title,attempted:0,correct:0,percent:0}));
-    let attempted=0,correct=0;
+    const cutoff=Date.parse(CONFIRMED_BASELINE_DATE);
+    const chapterStats=CHAPTERS.map((ch,ci)=>({
+      title:ch.title,
+      attempted:CONFIRMED_BASELINE_CHAPTERS[ci].attempted,
+      correct:CONFIRMED_BASELINE_CHAPTERS[ci].correct,
+      percent:0
+    }));
+    let attempted=chapterStats.reduce((n,s)=>n+s.attempted,0);
+    let correct=chapterStats.reduce((n,s)=>n+s.correct,0);
+    const afterSnapshot=new Set();
     for(const rec of store.history||[]){
-      if(rec.recoveredAggregate && Number.isInteger(rec.chapterIndex)){
-        attempted+=Number(rec.total||0);
-        correct+=Number(rec.correct||0);
-        chapterStats[rec.chapterIndex].attempted+=Number(rec.total||0);
-        chapterStats[rec.chapterIndex].correct+=Number(rec.correct||0);
-        continue;
-      }
-      for(const d of rec.details||[]){
+      if(rec.recoveredAggregate || !Array.isArray(rec.details) || !rec.details.length)continue;
+      const timestamp=Date.parse(rec.date);
+      if(!Number.isFinite(timestamp)||timestamp<=cutoff)continue;
+      const signature=String(rec.id)+'|'+String(rec.date)+'|'+String(rec.range);
+      if(afterSnapshot.has(signature))continue;
+      afterSnapshot.add(signature);
+      for(const d of rec.details){
         const q=ALL.find(x=>x.id===d.id);
         if(!q)continue;
         attempted++;
@@ -179,7 +208,6 @@ function App(){
     chapterStats.forEach(s=>s.percent=s.attempted?Math.round(s.correct/s.attempted*100):0);
     return {attempted,correct,percent:attempted?Math.round(correct/attempted*100):0,chapters:chapterStats};
   },[store.history]);
-
 
   const goHome=()=>{setView('home');setSelectedRecord(null)};
   const begin=cfg=>{
@@ -281,7 +309,10 @@ function App(){
     </Row>
 
 
-    <Card title="測驗正確率" style={{marginBottom:24}} extra={<Text type="secondary">依所有歷次作答統計</Text>}>
+    <Card title="測驗正確率" style={{marginBottom:24}} extra={<Text type="secondary">含截圖還原基準與後續作答</Text>}>
+      <Alert type="info" showIcon style={{marginBottom:16}}
+        message="已保留四章進度基準"
+        description="統計包含先前截圖確認的成績；錯題題號仍須從原本的學習紀錄匯入，不能由分數推算。跨裝置尚未啟用雲端同步。"/>
       <Row gutter={[20,20]} align="middle">
         <Col xs={24} md={6}>
           <Statistic title="全部題目正確率" value={performance.percent} suffix="%" />
@@ -425,7 +456,7 @@ function App(){
     {title:'',key:'action',render:(_,r)=><Button type="link" onClick={e=>{e.stopPropagation();setSelectedRecord(r);setView('historyDetail')}}>{r.recoveredAggregate?'查看還原資料':'查看錯題'}</Button>}
   ];
   const history=<>
-    <div className="page-head"><Text type="secondary">學習紀錄</Text><Title level={1}>歷次測驗</Title><Paragraph type="secondary">點擊任一筆紀錄即可查看當次答錯的題目、你的答案與正確答案。</Paragraph></div>
+    <div className="page-head"><Text type="secondary">學習紀錄</Text><Title level={1}>歷次測驗</Title><Paragraph type="secondary">點擊任一筆紀錄可查看錯題；截圖還原的統計僅有總分與作答數，沒有個別錯題資料。</Paragraph></div>
     <Row gutter={[16,16]} style={{marginBottom:16}}>
       <Col xs={24} md={8}><Card><Statistic title="全部正確率" value={performance.percent} suffix="%"/></Card></Col>
       <Col xs={24} md={16}><Card title="各章正確率">
