@@ -1,0 +1,236 @@
+@import "antd/dist/reset.css";
+html {
+  scroll-behavior: smooth;
+}
+body {
+  margin: 0;
+}
+* {
+  box-sizing: border-box;
+}
+.skip-link {
+  position: fixed;
+  left: 16px;
+  top: -80px;
+  z-index: 2000;
+  padding: 12px 20px;
+  color: white;
+  background: #237804;
+  border-radius: 6px;
+}
+.skip-link:focus {
+  top: 12px;
+}
+.desktop-sider {
+  position: fixed !important;
+  inset: 0 auto 0 0;
+  height: 100vh;
+  overflow-y: auto;
+  z-index: 20;
+}
+.with-sider {
+  margin-left: 224px;
+}
+.brand {
+  color: inherit;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 28px 20px 32px;
+}
+.brand strong {
+  display: block;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+}
+.brand small {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  letter-spacing: 1.7px;
+  color: #8c8c8c;
+}
+.sider-note {
+  margin: 48px 20px 24px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(128, 128, 128, 0.16);
+  color: #8c8c8c;
+}
+.sider-note p {
+  line-height: 1.8;
+  margin: 12px 0;
+}
+.workspace-header {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  height: auto;
+  min-height: 64px;
+  padding: 0 32px;
+  line-height: 64px;
+}
+.workspace-header .ant-flex {
+  min-height: 64px;
+}
+.workspace-content {
+  padding: 28px 32px 16px;
+  width: 100%;
+  max-width: 1680px;
+  margin: auto;
+}
+.page-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.page-heading h2 {
+  margin: 8px 0 !important;
+}
+.page-heading .ant-typography:last-child {
+  margin-bottom: 0;
+}
+.plan-aside {
+  position: sticky;
+  top: 88px;
+}
+.course-name {
+  white-space: normal;
+  text-align: left;
+  padding: 0 !important;
+  height: auto;
+  line-height: 1.6;
+  font-weight: 600;
+  font-size: 15px;
+}
+.course-code {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.teacher-link {
+  padding: 0 !important;
+  height: auto;
+  text-align: left;
+}
+.course-card {
+  height: 100%;
+}
+.course-card .ant-card-head-title {
+  white-space: normal;
+  padding-block: 6px;
+}
+.course-card .ant-card-head-wrapper {
+  align-items: flex-start;
+  gap: 10px;
+}
+.course-card .ant-card-extra {
+  padding-top: 8px;
+}
+.calendar-course {
+  height: auto;
+  min-height: 52px;
+  white-space: normal;
+  background: var(--ant-color-primary-bg, #f6ffed);
+  text-align: left;
+  color: var(--ant-color-primary, #237804);
+}
+.calendar-course > span {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.calendar-course small {
+  font-size: 12px;
+  opacity: 0.8;
+}
+.week-table .ant-table-cell {
+  padding: 8px !important;
+}
+.workspace-footer {
+  text-align: center;
+  padding: 24px 32px;
+}
+@media (max-width: 1199px) {
+  .plan-aside {
+    position: static;
+  }
+}
+@media (max-width: 991px) {
+  .workspace-header {
+    padding: 0 16px;
+  }
+  .workspace-content {
+    padding: 24px 16px 8px;
+  }
+  .page-heading {
+    flex-wrap: wrap;
+  }
+  .workspace-label {
+    display: none;
+  }
+}
+@media (max-width: 575px) {
+  .workspace-content {
+    padding: 20px 12px 8px;
+  }
+  .workspace-header {
+    padding: 0 8px;
+  }
+  .user-name {
+    display: none;
+  }
+  .page-heading h2 {
+    font-size: 26px;
+  }
+  .ant-card .ant-card-head {
+    padding-inline: 16px;
+  }
+  .ant-card .ant-card-body {
+    padding: 16px;
+  }
+  .workspace-footer {
+    padding: 20px 16px;
+  }
+  .ant-statistic .ant-statistic-content {
+    font-size: 26px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+.summary-statistics {
+  padding: 4px 0 24px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.16);
+}
+
+.desktop-sider {
+  border-inline-end: 1px solid rgba(128, 128, 128, 0.14);
+}
+.desktop-sider .ant-menu {
+  border-inline-end: none !important;
+}
+.planner-layout .ant-menu-sub.ant-menu-inline {
+  margin-inline: 8px;
+  width: calc(100% - 16px);
+  border-radius: 10px;
+  padding-block: 4px;
+}
+.planner-layout .ant-menu-sub .ant-menu-item {
+  width: calc(100% - 8px);
+  margin-inline: 4px;
+}
+.planner-layout .ant-menu-sub .ant-menu-item-selected {
+  background-color: #f6ffed;
+  color: #389e0d;
+}
+html.dark .planner-layout .ant-menu-sub .ant-menu-item-selected {
+  background-color: #1e351f;
+  color: #b7eb8f;
+}
+
+.ant-drawer .brand { display: none; }

@@ -1,0 +1,25 @@
+{
+  "name": "ntunhs-course-system",
+  "version": "1.0.0",
+  "private": true,
+  "description": "北護智慧預選課與課程規劃系統 — NTUNHS Smart Course Query & Planning System",
+  "type": "module",
+  "scripts": {
+    "dev": "node server/index.js",
+    "start": "node server/index.js",
+    "import": "node server/import_xls.js",
+    "build": "npm --prefix client run build",
+    "dev:client": "npm --prefix client run dev",
+    "build:hosted": "node scripts/build-worker.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "xlsx": "^0.18.5"
+  }
+}

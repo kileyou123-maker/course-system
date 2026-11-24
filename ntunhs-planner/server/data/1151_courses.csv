@@ -1,0 +1,1 @@
+編號,學期,');\n    if (idx !== -1) {\n      const csvText = txt.slice(idx);\n      fs.writeFileSync('C:/Users/USER/.gemini/antigravity/scratch/ntunhs-course-system/server/data/1151_courses.csv', csvText, 'utf8');\n      console.log('Saved CSV bytes:', csvText.length);\n      break;\n    }\n  }\n}\n\"","WaitMsBeforeAsync":5000,"toolSummary":"Save 1151 CSV course data to file"}}]}
