@@ -201,9 +201,7 @@ function MaterialPlanner({
     handleToggleCompleted,
     scheduleStats,
     gradProgress,
-    slotLookup,
-    designSystem,
-    setDesignSystem
+    slotLookup
   } = c;
   const zh = lang === "zh",
     L = (a, b) => zh ? a : b,
@@ -649,10 +647,6 @@ function MaterialPlanner({
           }}>
               {title[activeTab]}
             </Typography>
-            <Choice label={L("版本", "Version")} value={designSystem || "material"} options={[["material", "Material Design"], ["ant", "Ant Design"]]} onChange={setDesignSystem} sx={{
-            width: wide ? 170 : 130,
-            flexShrink: 0
-          }} />
             <IconButton sx={{
             ml: {
               xs: "auto",

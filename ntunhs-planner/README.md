@@ -1,6 +1,6 @@
 # 北護課程規劃
 
-使用 React 19，提供 Material Design（MUI 9.6，Material Design 2）及 Ant Design 6.7 兩套實際元件介面。右上角切換版本，保留同一份搜尋、課表、帳號及修課進度狀態。預設 Material，可用 ?design=ant 直接開啟 Ant。桌面預設表格、窄版改用課程列表；以白灰與自然綠色統一主題。
+使用 React 19 與 Material Design（MUI 9.6，Material Design 2）元件介面。桌面預設表格、窄版改用課程列表；以白灰與自然綠色統一主題。
 
 ## 功能
 
@@ -65,4 +65,4 @@ API整合測試使用獨立暫存SQLite及隨機帳密，不接觸線上資料�
 
 `/api/*` 透過 Vercel 同源代理連到原 Render 系統，因此可沿用原帳號、課程、預排與自行備註。登入後的資料變更會寫回原系統。此部署使用原後端行為，獨立 Express/SQLite 伺服器的修正需另外部署後端才會生效。
 
-首頁預設 Material Design，右上角可切換 Ant Design，切換時保留目前搜尋、規劃學期與登入狀態。網址 `?design=ant` 可直接開啟 Ant Design 版本。
+首頁使用 Material Design 介面，保留搜尋、規劃學期及登入狀態。

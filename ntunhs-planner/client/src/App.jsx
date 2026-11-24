@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, useRef, lazy, Suspense } from "react";
 import { apiRequest, getStoredToken, setStoredToken } from "./api.js";
 const MaterialWorkspace = lazy(() => import("./MaterialWorkspace.jsx"));
-const AntWorkspace = lazy(() => import("./Workspace.jsx"));
 import { MESSAGES } from "./i18n.js";
 
 const PERIODS = Array.from({ length: 14 }, (_, i) => i + 1);
@@ -71,19 +70,6 @@ const MED_PROGRAM_SET = new Set(
 );
 
 export default function App() {
-  const [designSystem, updateDesignSystem] = useState(() =>
-    new URL(location.href).searchParams.get("design") === "ant"
-      ? "ant"
-      : "material",
-  );
-  const setDesignSystem = (value) => {
-    if (!["material", "ant"].includes(value)) return;
-    updateDesignSystem(value);
-    const url = new URL(location.href);
-    url.searchParams.set("design", value);
-    history.replaceState(null, "", url);
-  };
-  const Workspace = designSystem === "ant" ? AntWorkspace : MaterialWorkspace;
   const [lang, setLang] = useState("zh");
   const t = MESSAGES[lang];
   const [darkMode, setDarkMode] = useState(() => {
@@ -854,10 +840,8 @@ export default function App() {
         </div>
       }
     >
-      <Workspace
+      <MaterialWorkspace
         controller={{
-          designSystem,
-          setDesignSystem,
           lang,
           setLang,
           darkMode,
