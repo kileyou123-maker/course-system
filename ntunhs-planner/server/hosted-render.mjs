@@ -24,6 +24,18 @@ app.use('/api', express.raw({type:()=>true,limit:'1mb'}), async (req,res)=>{
   if(req.get('content-type')) headers['Content-Type']=req.get('content-type');
   if(req.get('authorization')) headers.Authorization=req.get('authorization');
   try {
+    const adminOnly = url.pathname.startsWith('/api/courses') && req.method !== 'GET';
+    const advancedSearch = url.pathname === '/api/courses' && req.method === 'GET' &&
+      ['grade','tag','program','weekday','periods','matchMode','hideConflicts'].some(key => url.searchParams.has(key));
+    const privateRoute = (url.pathname.startsWith('/api/schedule') && !url.pathname.startsWith('/api/schedule/shared/')) || url.pathname === '/api/auth/completed-courses/toggle';
+    if (adminOnly || advancedSearch || privateRoute) {
+      if (!/^Bearer\s+\S+$/i.test(headers.Authorization || '')) return res.status(401).json({error:'請先登入 / Sign in required'});
+      const check=await fetch(upstream+'/api/auth/me',{headers:{Accept:'application/json',Authorization:headers.Authorization},redirect:'manual',signal:AbortSignal.timeout(90000)});
+      if (!check.ok) return res.status(check.status===401 || check.status===403 ? 401 : 502).json({error:'登入驗證失敗 / Unable to verify session'});
+      const account=(await check.json()).user;
+      if (!account) return res.status(401).json({error:'請先登入 / Sign in required'});
+      if (adminOnly && account.role !== 'admin') return res.status(403).json({error:'需要管理員權限 / Administrator access required'});
+    }
     const result=await fetch(upstream+url.pathname+url.search,{method:req.method,headers,body:req.method==='GET'?undefined:req.body,redirect:'manual',signal:AbortSignal.timeout(90000)});
     if(result.status>=300 && result.status<400) return res.status(502).json({error:'Unexpected upstream redirect'});
     res.status(result.status).set('Content-Type',result.headers.get('content-type')||'application/json');

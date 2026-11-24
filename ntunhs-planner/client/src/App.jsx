@@ -92,6 +92,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("search"); // search | mobile | admin | auth
   const [mobileView, setMobileView] = useState("search"); // search | schedule
   const [user, setUser] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
   const [toast, setToast] = useState(null);
 
   // Metadata
@@ -228,19 +229,23 @@ export default function App() {
     if (getStoredToken()) {
       apiRequest("/api/auth/me")
         .then((data) => setUser(data.user))
-        .catch(() => setStoredToken(""));
+        .catch(() => setStoredToken(""))
+        .finally(() => setAuthReady(true));
+    } else {
+      setAuthReady(true);
     }
   }, []);
 
   // Load user's schedule when logged in
   const refreshSchedule = async () => {
-    if (!getStoredToken()) {
+    if (!user || !getStoredToken()) {
       setSchedule([]);
       return;
     }
     try {
+      const token = getStoredToken();
       const data = await apiRequest("/api/schedule");
-      setSchedule(data.items || []);
+      if (token === getStoredToken()) setSchedule(data.items || []);
     } catch {
       setSchedule([]);
     }
@@ -292,15 +297,16 @@ export default function App() {
       if (filters.semester) params.set("semester", filters.semester);
       if (filters.department) params.set("department", filters.department);
       if (filters.category) params.set("category", filters.category);
-      if (filters.grade) params.set("grade", filters.grade);
-      if (filters.tag) params.set("tag", filters.tag);
-      if (filters.program) params.set("program", filters.program);
-      if (filters.weekday) params.set("weekday", filters.weekday);
-      if (filters.periods.length > 0)
-        params.set("periods", filters.periods.join(","));
-      params.set("matchMode", filters.matchMode);
+      if (user) {
+        if (filters.grade) params.set("grade", filters.grade);
+        if (filters.tag && filters.tag !== "ALL") params.set("tag", filters.tag);
+        if (filters.program && filters.program !== "ALL") params.set("program", filters.program);
+        if (filters.weekday) params.set("weekday", filters.weekday);
+        if (filters.periods.length > 0) params.set("periods", filters.periods.join(","));
+        params.set("matchMode", filters.matchMode);
+      }
       if (filters.keyword.trim()) params.set("keyword", filters.keyword.trim());
-      if (filters.hideConflicts) params.set("hideConflicts", "true");
+      if (user && filters.hideConflicts) params.set("hideConflicts", "true");
       params.set("page", String(filters.page));
       params.set("limit", "10");
 
@@ -461,10 +467,20 @@ export default function App() {
     setStoredToken("");
     setUser(null);
     setSchedule([]);
+    setSelectedCourse(null);
+    setSelectedTeacher(null);
+    setShareUrl("");
+    setEditingCourse(null);
+    setIncludePlannedInGrad(false);
+    setShowGradSettings(false);
+    handleResetFilters();
+    setActiveTab("search");
+    window.location.hash = "/search";
     showToast(lang === "zh" ? "已登出系統" : "Signed out");
   };
 
   const handleAdminCreate = async (e) => {
+    if (user?.role !== "admin") { showToast(lang === "zh" ? "需要管理員權限" : "Administrator access required", "error"); return false; }
     e.preventDefault();
     try {
       await apiRequest("/api/courses", {
@@ -481,6 +497,7 @@ export default function App() {
   };
 
   const handleAdminDelete = async (id) => {
+    if (user?.role !== "admin") { showToast(lang === "zh" ? "需要管理員權限" : "Administrator access required", "error"); return false; }
     try {
       await apiRequest(`/api/courses/${id}`, { method: "DELETE" });
       showToast(lang === "zh" ? "已刪除課程" : "Course deleted");
@@ -491,6 +508,7 @@ export default function App() {
   };
 
   const handleAdminUpdate = async (e) => {
+    if (user?.role !== "admin") { showToast(lang === "zh" ? "需要管理員權限" : "Administrator access required", "error"); return false; }
     e.preventDefault();
     if (!editingCourse) return;
     try {
@@ -507,6 +525,7 @@ export default function App() {
   };
 
   const handleAdminImport = async () => {
+    if (user?.role !== "admin") { showToast(lang === "zh" ? "需要管理員權限" : "Administrator access required", "error"); return false; }
     try {
       const parsed = JSON.parse(importJson);
       const courses = Array.isArray(parsed) ? parsed : parsed.courses;
@@ -544,6 +563,7 @@ export default function App() {
   };
 
   const handleToggleCompleted = async (course) => {
+    if (!user || !getStoredToken()) { showToast(t.loginPrompt, "error"); return; }
     const rawCode = String(course.code || "");
     const baseCode = rawCode.split("_")[0];
     const subjCode = baseCode.length >= 9 ? baseCode.slice(5, 9) : "";
@@ -849,6 +869,7 @@ export default function App() {
           activeTab,
           setActiveTab,
           user,
+          authReady,
           toast,
           setToast,
           meta,

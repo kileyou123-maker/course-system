@@ -146,9 +146,10 @@ function MaterialPlanner({
     setDarkMode,
     showPassword,
     setShowPassword,
-    activeTab,
+    activeTab: requestedTab,
     setActiveTab,
     user,
+    authReady,
     toast,
     setToast,
     meta,
@@ -203,6 +204,9 @@ function MaterialPlanner({
     gradProgress,
     slotLookup
   } = c;
+  const isAdmin = user?.role === "admin";
+  const allowedTab = v => v === "admin" ? isAdmin : ["schedule", "progress"].includes(v) ? !!user : ["search", "auth"].includes(v);
+  const activeTab = allowedTab(requestedTab) ? requestedTab : "search";
   const zh = lang === "zh",
     L = (a, b) => zh ? a : b,
     desktop = useMediaQuery("(min-width:1200px)"),
@@ -231,13 +235,20 @@ function MaterialPlanner({
   useEffect(() => {
     const sync = () => {
       const v = location.hash.slice(2);
-      if (["search", "schedule", "progress", "admin", "auth"].includes(v)) setActiveTab(v);
+      if (!authReady) return;
+      if (allowedTab(v)) setActiveTab(v);
+      else if (["schedule", "progress", "admin"].includes(v)) {
+        const next = user ? "search" : "auth";
+        setActiveTab(next);
+        location.hash = "/" + next;
+      }
     };
     sync();
     addEventListener("hashchange", sync);
     return () => removeEventListener("hashchange", sync);
-  }, []);
+  }, [authReady, user]);
   const go = v => {
+    if (!allowedTab(v)) v = user ? "search" : "auth";
     setActiveTab(v);
     setNavOpen(false);
     location.hash = `/${v}`;
@@ -268,7 +279,7 @@ function MaterialPlanner({
   }}>
       <Chip size="small" variant="outlined" color={x.category?.includes("必修") ? "primary" : "default"} label={category(x.category)} />
       {x.programs?.map(p => <Chip size="small" variant="outlined" key={p.code} label={zh ? p.name : p.name_en} />)}
-      {isCourseCompleted(x) && <Chip size="small" color="primary" label={L("已備註修過", "Self-reported")} />}
+      {user && isCourseCompleted(x) && <Chip size="small" color="primary" label={L("已備註修過", "Self-reported")} />}
     </Stack>;
   const courseTitle = x => <Box>
       <Button sx={{
@@ -285,7 +296,7 @@ function MaterialPlanner({
         {x.code}
       </Typography>
     </Box>;
-  const actions = x => <Stack direction="row" sx={{
+  const actions = x => user ? <Stack direction="row" sx={{
     gap: 1,
     alignItems: "center"
   }}>
@@ -301,7 +312,7 @@ function MaterialPlanner({
           {isCourseCompleted(x) ? <Bookmark /> : <BookmarkBorder />}
         </IconButton>
       </Tooltip>
-    </Stack>;
+    </Stack> : null;
   const semesters = meta.semesters.map(s => [s, semester(s, zh)]);
   const scope = <Box sx={{
     minWidth: 220
@@ -344,7 +355,7 @@ function MaterialPlanner({
       <List sx={{
       px: 1
     }}>
-        {[["search", Search], ["schedule", CalendarMonth], ["progress", School]].map(([id, Icon]) => <ListItemButton key={id} selected={activeTab === id} onClick={() => go(id)} sx={{
+        {[["search", Search], ...(user ? [["schedule", CalendarMonth], ["progress", School]] : [])].map(([id, Icon]) => <ListItemButton key={id} selected={activeTab === id} onClick={() => go(id)} sx={{
         borderRadius: 1,
         mb: 0.5
       }}>
@@ -359,7 +370,7 @@ function MaterialPlanner({
         <Divider sx={{
         my: 1
       }} />
-        <ListItemButton onClick={() => setAdminOpen(!adminOpen)}>
+        {isAdmin && <><ListItemButton onClick={() => setAdminOpen(!adminOpen)}>
           <ListItemIcon sx={{
           minWidth: 40
         }}>
@@ -385,7 +396,7 @@ function MaterialPlanner({
                 <ListItemText primary={label} />
               </ListItemButton>)}
           </List>
-        </Collapse>
+        </Collapse></>}
         <ListItemButton selected={activeTab === "auth"} onClick={() => go("auth")} sx={{
         borderRadius: 1
       }}>
@@ -441,7 +452,7 @@ function MaterialPlanner({
           <Choice label={L("開課系所", "Department")} value={filters.department} options={[["ALL", L("全部系所", "All departments")], ...meta.departments.map(d => [d, d])]} onChange={v => filter("department", v)} />
           <Choice label={L("課程類別", "Category")} value={filters.category} options={[["ALL", L("全部課別", "All categories")], ...meta.categories.map(x => [x, category(x)])]} onChange={v => filter("category", v)} />
         </Box>
-        <Accordion disableGutters elevation={0} sx={{
+        {user && <Accordion disableGutters elevation={0} sx={{
         "&:before": {
           display: "none"
         },
@@ -514,8 +525,8 @@ function MaterialPlanner({
             </Typography>
             <FormControlLabel control={<Checkbox checked={filters.hideConflicts} onChange={e => filter("hideConflicts", e.target.checked)} />} label={L("隱藏與預排衝堂課程", "Hide time conflicts")} />
           </AccordionDetails>
-        </Accordion>
-        {(filters.periods.length > 0 || filters.weekday) && <Stack direction="row" sx={{
+        </Accordion>}
+        {user && (filters.periods.length > 0 || filters.weekday) && <Stack direction="row" sx={{
         gap: 1,
         flexWrap: "wrap"
       }}>
@@ -725,7 +736,7 @@ function MaterialPlanner({
               borderBottom: 1,
               borderColor: "divider"
             }]}>
-                  {[[L("目前查詢課程", "Courses found"), courseResult.total], [L("本學期預排學分", "Planned credits"), scheduleStats.total], [L("自行備註已修", "Self-reported credits"), gradProgress.completedTotal]].map(([label, value]) => <Box key={label}>
+                  {[[L("目前查詢課程", "Courses found"), courseResult.total], ...(user ? [[L("本學期預排學分", "Planned credits"), scheduleStats.total], [L("自行備註已修", "Self-reported credits"), gradProgress.completedTotal]] : [])].map(([label, value]) => <Box key={label}>
                       <Typography variant="body2" color="text.secondary">
                         {label}
                       </Typography>
@@ -738,7 +749,7 @@ function MaterialPlanner({
                 </Stack>
                 <Box sx={{
               display: "grid",
-              gridTemplateColumns: desktop ? "minmax(0,1fr) 300px" : "minmax(0,1fr)",
+              gridTemplateColumns: desktop && user ? "minmax(0,1fr) 300px" : "minmax(0,1fr)",
               gap: 3,
               alignItems: "start"
             }}>
@@ -776,7 +787,7 @@ function MaterialPlanner({
                     }}>
                             <TableHead>
                               <TableRow>
-                                {[L("課程", "Course"), L("學分", "Credits"), L("教師與時間", "Instructor & time"), L("預排", "Plan")].map(v => <TableCell key={v}>{v}</TableCell>)}
+                                {[L("課程", "Course"), L("學分", "Credits"), L("教師與時間", "Instructor & time"), ...(user ? [L("預排", "Plan")] : [])].map(v => <TableCell key={v}>{v}</TableCell>)}
                               </TableRow>
                             </TableHead>
                             <TableBody>
@@ -812,12 +823,12 @@ function MaterialPlanner({
                                       </Typography>
                                     </Stack>
                                   </TableCell>
-                                  <TableCell>
+                                  {user && <TableCell>
                                     {actions(x)}
                                     {reason(x) && <Typography variant="caption" color="error">
                                         {reason(x)}
                                       </Typography>}
-                                  </TableCell>
+                                  </TableCell>}
                                 </TableRow>)}
                             </TableBody>
                           </Table>
@@ -847,7 +858,7 @@ function MaterialPlanner({
                         })}>
                                   {zh ? x.teacher_name : x.teacher_en || x.teacher_name}
                                 </Button>
-                                {reason(x) && <Alert severity="warning">{reason(x)}</Alert>}
+                                {user && reason(x) && <Alert severity="warning">{reason(x)}</Alert>}
                                 {actions(x)}
                               </Stack>
                             </Paper>)}
@@ -855,15 +866,16 @@ function MaterialPlanner({
                       {courseResult.total > 0 && pagination}
                     </Surface>
                   </Stack>
-                  <Box sx={{
+                  {user && <Box sx={{
                 position: desktop ? "sticky" : "static",
                 top: 88
               }}>
                     {plan}
-                  </Box>
+                  </Box>}
+                  {!user && <Alert severity="info" action={<Button onClick={() => go("auth")}>{L("登入", "Sign in")}</Button>}>{L("登入後可使用完整功能。", "Sign in to access all features.")}</Alert>}
                 </Box>
               </>}
-            {activeTab === "schedule" && <>
+            {user && activeTab === "schedule" && <>
                 <Alert severity="info">
                   {L("預排不會提交正式選課，支援週末與晚間。", "Planning does not submit official registration. Weekends and evenings are supported.")}
                 </Alert>
@@ -969,7 +981,7 @@ function MaterialPlanner({
                   </Stack>
                 </Surface>
               </>}
-            {activeTab === "progress" && <>
+            {user && activeTab === "progress" && <>
                 <Alert severity="warning">
                   {L("本頁是自行備註與預排估算，不是正式成績或畢業審查。門檻沿用資管113學年與原學程20學分假設，請以校方規定核對。", "Self-reported and estimated credits only. Targets inherit the original IM year-113 and 20-credit program assumptions; verify official rules.")}
                 </Alert>
@@ -1056,7 +1068,7 @@ function MaterialPlanner({
                   </Typography>
                 </Surface>
               </>}
-            {activeTab === "admin" && (user?.role !== "admin" ? <EmptyState text={L("需要管理者權限才能維護課程。", "An administrator account is required.")}>
+            {isAdmin && activeTab === "admin" && (user?.role !== "admin" ? <EmptyState text={L("需要管理者權限才能維護課程。", "An administrator account is required.")}>
                   <Button variant="contained" onClick={() => go("auth")}>
                     {L("前往登入", "Sign in")}
                   </Button>
@@ -1313,7 +1325,7 @@ function MaterialPlanner({
           </Button>
         </DialogActions>
       </Dialog>
-      <Dialog open={!!shareUrl} onClose={() => setShareUrl("")} fullWidth>
+      <Dialog open={!!user && !!shareUrl} onClose={() => setShareUrl("")} fullWidth>
         <DialogTitle>{L("課表分享連結", "Schedule sharing link")}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{
@@ -1349,7 +1361,7 @@ function MaterialPlanner({
           </Button>
         </DialogActions>
       </Dialog>
-      <Dialog open={!!confirm} onClose={() => !saving && setConfirm(null)}>
+      <Dialog open={!!user && !!confirm} onClose={() => !saving && setConfirm(null)}>
         <DialogTitle>{confirm?.title}</DialogTitle>
         <DialogContent>
           <Typography>{confirm?.text}</Typography>
@@ -1371,7 +1383,7 @@ function MaterialPlanner({
           </Button>
         </DialogActions>
       </Dialog>
-      <Dialog open={creating || !!editingCourse} onClose={() => {
+      <Dialog open={isAdmin && (creating || !!editingCourse)} onClose={() => {
       setCreating(false);
       setEditingCourse(null);
     }} maxWidth="md" fullWidth>
