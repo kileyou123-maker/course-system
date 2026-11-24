@@ -1,0 +1,47 @@
+name: Deploy NTUNHS planner to GitHub Pages
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'ntunhs-planner/client/**'
+      - '.github/workflows/ntunhs-pages.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ntunhs-pages
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+        working-directory: ntunhs-planner/client
+      - run: npm run build
+        working-directory: ntunhs-planner/client
+        env:
+          VITE_BASE_PATH: /course-system/
+          VITE_API_BASE_URL: https://ntunhs-course-system-web.onrender.com
+          VITE_BACKEND_MODE: upstream
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ntunhs-planner/client/dist
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
