@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
   "installCommand": "npm ci && npm --prefix client ci",
-  "buildCommand": "npm run build",
+  "buildCommand": "VITE_BACKEND_MODE=upstream npm run build",
   "outputDirectory": "client/dist",
   "rewrites": [
     {
